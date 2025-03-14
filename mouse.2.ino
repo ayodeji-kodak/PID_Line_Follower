@@ -35,17 +35,18 @@ int threshold[SensorCount];  // Stores threshold values
 /*************************************************************************
 *  PID control system variables
 *************************************************************************/
-float Kp = 0.07;    // Proportional control constant
-float Ki = 0.0008;  // Integral control constant
-float Kd = 0.6;     // Derivative control constant
+float Kp = 0.5;  // Proportional control constant
+float Ki = 0;  // Integral control constant
+float Kd = 0;  // Derivative control constant
 int P;
 int I;
 int D;
+int PIDvalue, error;
 
 /*************************************************************************
 *  Global variables
 *************************************************************************/
-int lastError = 0;
+int previousError = 0;
 int motorspeeda, motorspeedb;
 
 void setup() {
@@ -78,6 +79,7 @@ void loop() {
   sensorValues[3] = analogRead(rside);   // Right sensor
 
   // Print sensor values
+  /*
   Serial.print("Sensor Values: ");
   for (int i = 0; i < SensorCount; i++) {
     Serial.print(sensorValues[i]);
@@ -86,10 +88,44 @@ void loop() {
     }
   }
   Serial.println();  // Newline after printing all values
-
+*/
+  
   // Call PID control to adjust motors (to be implemented)
+  linefollow();
+  delay(2000);  // Delay to avoid flooding the serial monitor
+}
 
-  delay(1000); // Delay to avoid flooding the serial monitor
+void linefollow() {
+  int error = (sensorValues[1] - sensorValues[2]);
+
+  P = error;
+  I = I + error;
+  D = error - previousError;
+
+  PIDvalue = (Kp * P) + (Ki * I) + (Kd * D);
+  previousError = error;
+
+  motorspeeda = 150 + PIDvalue;
+  motorspeedb = 150 - PIDvalue;
+
+  if (motorspeeda > 255) {
+    motorspeeda = 255;
+  }
+  if (motorspeeda < 0) {
+    motorspeeda = 0;
+  }
+  if (motorspeedb > 255) {
+    motorspeedb = 255;
+  }
+  if (motorspeedb < 0) {
+    motorspeedb = 0;
+  }
+  forward(motorspeeda, motorspeedb);
+  // Print motor speeds
+  Serial.print("Motor A Speed: ");
+  Serial.print(motorspeeda);
+  Serial.print(" | Motor B Speed: ");
+  Serial.println(motorspeedb);
 }
 
 // Function to calibrate sensor readings
@@ -141,19 +177,19 @@ int getSensorPin(int index) {
     case 1: return lfront;
     case 2: return rfront;
     case 3: return rside;
-    default: return A0; // Default case, should never be reached
+    default: return A0;  // Default case, should never be reached
   }
 }
 
 // Function to make the robot spin (for calibration)
 void spinRobot() {
-  analogWrite(lmotorPWM, 150); // Left motor forward
-  analogWrite(rmotorPWM, 150); // Right motor backward
+  analogWrite(lmotorPWM, 150);  // Left motor forward
+  analogWrite(rmotorPWM, 150);  // Right motor backward
 
-  digitalWrite(lmotorDIR, HIGH); // Set left motor forward
-  digitalWrite(rmotorDIR, LOW);  // Set right motor backward
+  digitalWrite(lmotorDIR, HIGH);  // Set left motor forward
+  digitalWrite(rmotorDIR, LOW);   // Set right motor backward
 
-  delay(10); // Small delay to allow the robot to spin slightly
+  delay(10);  // Small delay to allow the robot to spin slightly
 }
 
 // Function to control motors
@@ -161,6 +197,6 @@ void forward(int leftSpeed, int rightSpeed) {
   analogWrite(lmotorPWM, abs(leftSpeed));
   analogWrite(rmotorPWM, abs(rightSpeed));
 
-  digitalWrite(lmotorDIR, leftSpeed > 0 ? HIGH : LOW);
-  digitalWrite(rmotorDIR, rightSpeed > 0 ? HIGH : LOW);
+  digitalWrite(lmotorDIR, leftSpeed > 0 ? LOW : HIGH);
+  digitalWrite(rmotorDIR, rightSpeed > 0 ? LOW : HIGH);
 }
