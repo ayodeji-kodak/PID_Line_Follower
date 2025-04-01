@@ -1,0 +1,262 @@
+// Input pins:
+int rside = A0;          // Right side sensor input
+int rfront = A1;         // Front right line sensor input
+int lfront = A2;         // Front left sensor input
+int lside = A3;          // Left side sensor input
+int sens1 = A4;          // Unassigned sensor input 1
+int sens2 = A5;          // Unassigned sensor input 2
+int fourwayswitch = A6;  // Input from function switch
+int battery = A7;        // Input for battery measurement
+int Receive = 0;         // Receive pin
+int Transmit = 1;        // Transmit pin
+int m1encoder1 = 2;      // Motor 1 encoder 1 input (interrupt pin)
+int m1encoder2 = 4;      // Motor 1 encoder 2 input
+int m2encoder1 = 3;      // Motor 2 encoder 1 input (interrupt pin)
+int m2encoder2 = 5;      // Motor 2 encoder 2 input
+
+// Output pins:
+int sensorLED1 = 6;   // 1st diagnostic LED on sensor board
+int lmotorDIR = 7;    // Left motor direction input
+int rmotorDIR = 8;    // Right motor direction input
+int lmotorPWM = 9;    // Left motor PWM pin
+int rmotorPWM = 10;   // Right motor PWM pin
+int sensorLED2 = 11;  // 2nd diagnostic LED on sensor board
+int trigger = 12;     // Trigger for sensor LEDs
+int LED13 = 13;       // External LED Red
+
+const int SensorCount = 4;      // Number of sensors
+int sensorValues[SensorCount];  // Array to store sensor readings
+
+// Encoder counts
+volatile int m1encoderCount = 0;
+volatile int m2encoderCount = 0;
+
+// For encoder PID, we also store the previous counts
+int m1encoderCountPrev = 0;
+int m2encoderCountPrev = 0;
+
+// Constants for the robot
+const int pulsesPerRevolution = 360;                       // Example: 360 pulses per revolution
+const float wheelDiameter = 0.02;                          // Example: Wheel diameter in meters (adjust as necessary)
+const float wheelCircumference = wheelDiameter * 3.14159;    // Calculate wheel circumference (meters)
+
+// Calibration data
+int minValues[SensorCount];  // Stores minimum sensor values
+int maxValues[SensorCount];  // Stores maximum sensor values
+int threshold[SensorCount];  // Stores threshold values
+
+/*************************************************************************
+*  PID control system variables (for line following)
+*************************************************************************/
+float Kp = 0.15;   // Proportional control constant
+float Ki = 0;      // Integral control constant (if needed)
+float Kd = 0.005;  // Derivative control constant
+int P;
+int I;
+int D;
+int PIDvalue, error;
+double dt, last_time;
+int previousError = 0;
+
+/*************************************************************************
+*  Global variables for motor speeds (base speeds from line PID)
+*************************************************************************/
+int motorspeeda, motorspeedb;
+
+/*************************************************************************
+*  PID control variables for encoder-based speed matching
+*************************************************************************/
+float Kp_enc = 0.2;    // Proportional gain for encoder PID (tune as needed)
+float Ki_enc = 0.0;    // Integral gain for encoder PID (optional)
+float Kd_enc = 0.01;   // Derivative gain for encoder PID (tune as needed)
+double I_enc = 0;      // Integral accumulator for encoder PID
+int previousErrorEnc = 0;
+
+void setup() {
+  pinMode(sensorLED1, OUTPUT);
+  pinMode(lmotorDIR, OUTPUT);
+  pinMode(rmotorDIR, OUTPUT);
+  pinMode(lmotorPWM, OUTPUT);
+  pinMode(rmotorPWM, OUTPUT);
+  pinMode(sensorLED2, OUTPUT);
+  pinMode(trigger, OUTPUT);
+  pinMode(LED13, OUTPUT);
+  pinMode(m1encoder1, INPUT);
+  pinMode(m1encoder2, INPUT);
+  pinMode(m2encoder1, INPUT);
+  pinMode(m2encoder2, INPUT);
+
+  Serial.begin(9600);  // Set up serial monitor communications
+
+  // Perform sensor calibration
+  calibrate();
+  delay(3000);
+}
+
+void loop() {
+  digitalWrite(trigger, HIGH);  // Turn emitter on
+  
+  double now = millis();
+  dt = (now - last_time) / 1000.0;  // dt in seconds
+  last_time = now;
+
+  // Read the sensor values for line following
+  sensorValues[0] = analogRead(lside);   // Left sensor
+  sensorValues[1] = analogRead(lfront);    // Left front sensor
+  sensorValues[2] = analogRead(rfront);    // Right front sensor
+  sensorValues[3] = analogRead(rside);     // Right sensor
+
+  // First PID loop: Calculate base motor speeds for line following
+  linefollow();
+
+  // Second PID loop: Adjust motor speeds based on encoder feedback to match wheel speeds
+  updateEncoderPID();
+
+  // Drive the motors with the final adjusted speeds
+  forward(motorspeeda, motorspeedb);
+
+  // Print motor speeds for debugging
+  Serial.print("Motor A Speed: ");
+  Serial.print(motorspeeda);
+  Serial.print(" | Motor B Speed: ");
+  Serial.println(motorspeedb);
+}
+
+//
+// PID loop for line following based on sensor error
+//
+void linefollow() {
+  digitalWrite(sensorLED2, HIGH);
+  // Calculate error from the difference between left front and right front sensors
+  int error = sensorValues[1] - sensorValues[2];
+
+  // PID computations
+  P = error;
+  I = (I + error) * dt;
+  D = (error - previousError) / dt;
+  PIDvalue = (Kp * P) + (Ki * I) + (Kd * D);
+  previousError = error;
+
+  // Base motor speeds set around a nominal speed (150) modified by the PID value
+  motorspeeda = 150 + PIDvalue;
+  motorspeedb = 150 - PIDvalue;
+
+  // Constrain speeds to safe limits (adjust as necessary)
+  motorspeeda = constrain(motorspeeda, 0, 70);
+  motorspeedb = constrain(motorspeedb, 0, 70);
+}
+
+//
+// New PID loop for encoder-based speed matching
+//
+void updateEncoderPID() {
+  // Calculate encoder ticks since the last update
+  int m1ticks = m1encoderCount - m1encoderCountPrev;
+  int m2ticks = m2encoderCount - m2encoderCountPrev;
+
+  // Update previous encoder counts for the next iteration
+  m1encoderCountPrev = m1encoderCount;
+  m2encoderCountPrev = m2encoderCount;
+
+  // Compute error as the difference in ticks between the two motors.
+  // A positive error indicates motor 1 is moving faster than motor 2.
+  int errorEnc = m1ticks - m2ticks;
+
+  // PID calculations for the encoder error
+  double P_enc = errorEnc;
+  I_enc += errorEnc * dt;
+  double D_enc = (errorEnc - previousErrorEnc) / dt;
+  double encoderPID = (Kp_enc * P_enc) + (Ki_enc * I_enc) + (Kd_enc * D_enc);
+  previousErrorEnc = errorEnc;
+
+  // Adjust the base motor speeds.
+  // If motor 1 is faster, subtract the correction from motor A and add it to motor B.
+  motorspeeda = motorspeeda - encoderPID;
+  motorspeedb = motorspeedb + encoderPID;
+
+  // Ensure the final speeds remain within desired limits.
+  motorspeeda = constrain(motorspeeda, 0, 70);
+  motorspeedb = constrain(motorspeedb, 0, 70);
+}
+
+//
+// Function to calibrate sensor readings
+//
+void calibrate() {
+  digitalWrite(trigger, HIGH);  // Turn emitter on
+  digitalWrite(LED13, HIGH);    // Turn on indicator
+  Serial.println("Starting calibration...");
+
+  // Initialize min and max values for each sensor
+  for (int i = 0; i < SensorCount; i++) {
+    minValues[i] = analogRead(getSensorPin(i));
+    maxValues[i] = analogRead(getSensorPin(i));
+  }
+
+  // Calibration process: spin the robot and collect readings
+  for (int j = 0; j < 1000; j++) {
+    spinRobot();  // Make the robot spin during calibration
+    for (int i = 0; i < SensorCount; i++) {
+      int sensorReading = analogRead(getSensorPin(i));
+      if (sensorReading < minValues[i]) {
+        minValues[i] = sensorReading;
+      }
+      if (sensorReading > maxValues[i]) {
+        maxValues[i] = sensorReading;
+      }
+    }
+  }
+
+  // Calculate threshold values for each sensor
+  for (int i = 0; i < SensorCount; i++) {
+    threshold[i] = (minValues[i] + maxValues[i]) / 2;
+    Serial.print("Sensor ");
+    Serial.print(i);
+    Serial.print(" -> Min: ");
+    Serial.print(minValues[i]);
+    Serial.print(", Max: ");
+    Serial.print(maxValues[i]);
+    Serial.print(", Threshold: ");
+    Serial.println(threshold[i]);
+  }
+
+  forward(0, 0);  // Stop the robot after calibration
+  Serial.println("Calibration complete!");
+}
+
+//
+// Function to map sensor index to its corresponding pin number
+//
+int getSensorPin(int index) {
+  switch (index) {
+    case 0: return lside;
+    case 1: return lfront;
+    case 2: return rfront;
+    case 3: return rside;
+    default: return A0;  // Should never reach this case
+  }
+}
+
+//
+// Function to make the robot spin (used during calibration)
+//
+void spinRobot() {
+  analogWrite(lmotorPWM, 50);  // Left motor forward
+  analogWrite(rmotorPWM, 50);  // Right motor backward
+
+  digitalWrite(lmotorDIR, HIGH);  // Set left motor forward
+  digitalWrite(rmotorDIR, LOW);   // Set right motor backward
+
+  delay(10);  // Short delay to allow the robot to spin
+}
+
+//
+// Function to control motors: sets PWM and direction for each motor
+//
+void forward(int leftSpeed, int rightSpeed) {
+  analogWrite(lmotorPWM, abs(leftSpeed));
+  analogWrite(rmotorPWM, abs(rightSpeed));
+
+  digitalWrite(lmotorDIR, leftSpeed > 0 ? LOW : HIGH);
+  digitalWrite(rmotorDIR, rightSpeed > 0 ? LOW : HIGH);
+}
