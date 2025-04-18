@@ -1,0 +1,59 @@
+//Testing code
+int lside         = A3; // left side sensor input
+int rfront        = A1; // front left line sensor input
+int lfront        = A2; // front right left sensor input
+int rside         = A0; // right side sensor input
+int sens1         = A4; // unassigned sensor input 1
+int sens2         = A5; // unassigned sensor input 2
+int fourwayswitch = A6; // input from function switch
+int battery       = A7; // input for battery measurement
+int Receive       = 0;  // Receive pin
+int Transmit      = 1;  // Transmit pin
+int m1encoder1    = 2;  // motor 1 encoder 1 input interrupt pin
+int m1encoder2    = 4;  // motor 1 encoder 2 input
+int m2encoder1    = 3;  // motor 2 encoder 1 input interrupt pin
+int m2encoder2    = 5;  // motor 2 encoder 2 input
+ 
+// Output pins:
+int sensorLED1    = 6;  // 1st diagnostic LED on sensor board
+int lmotorDIR     = 7;  // Left motor direction input 1
+int rmotorDIR     = 8;  // Right motor direction input 3
+int lmotorPWM     = 9;  // Left motor PWM pin
+int rmotorPWM     = 10; // Right motor PWM pin
+int sensorLED2    = 11; // 2nd diagnostic LED on sensor board
+int trigger       = 12; // trigger for sensor LEDs
+int LED13         = 13; // external LED Red
+ 
+void setup() {
+  pinMode(sensorLED1, OUTPUT);
+  pinMode(lmotorDIR, OUTPUT);
+  pinMode(rmotorDIR, OUTPUT);
+  pinMode(lmotorPWM, OUTPUT);
+  pinMode(rmotorPWM, OUTPUT);
+  pinMode(sensorLED2, OUTPUT);
+  pinMode(trigger, OUTPUT);
+  pinMode(LED13, OUTPUT);
+  pinMode(m1encoder1, INPUT);
+  pinMode(m1encoder2, INPUT);
+  pinMode(m2encoder1, INPUT);
+  pinMode(m2encoder2, INPUT);
+ 
+  Serial.begin(9600); // Start serial communication
+}
+ 
+void loop() {
+  digitalWrite(trigger, HIGH);
+  analogWrite(rmotorPWM, 40);
+  analogWrite(lmotorPWM, 40);
+  Serial.println("========================");
+  int right = analogRead(rfront);
+  Serial.print("Right sensor: ");
+  Serial.println(right);
+ 
+  delay(1000);
+ 
+  int left = analogRead(lfront);
+  Serial.print("Left sensor: ");
+  Serial.println(left);
+   delay(2000);
+}
