@@ -104,8 +104,8 @@ void linefollow() {
   motorspeeda = 150 + PIDvalue;
   motorspeedb = 150 - PIDvalue;
 
-  motorspeeda = constrain(motorspeeda, 0, 70);
-  motorspeedb = constrain(motorspeedb, 0, 70);
+  motorspeeda = constrain(motorspeeda, 0, 50);
+  motorspeedb = constrain(motorspeedb, 0, 50);
 
   forward(motorspeeda, motorspeedb);
 }
