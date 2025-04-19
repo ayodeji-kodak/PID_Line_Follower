@@ -30,9 +30,9 @@ int minValues[SensorCount];
 int maxValues[SensorCount];
 int threshold[SensorCount];
 
-float Kp = 0.15;
+float Kp = 0.01;
 float Ki = 0;
-float Kd = 0.005;
+float Kd = 0;
 int P, I, D;
 int PIDvalue;
 double dt, last_time;
@@ -121,7 +121,7 @@ void calibrate() {
     maxValues[i] = val;
   }
 
-  for (int j = 0; j < 1000; j++) {
+  for (int j = 0; j < 700; j++) {
     spinRobot();
     for (int i = 0; i < SensorCount; i++) {
       int val = analogRead(sensorPins[i]);
