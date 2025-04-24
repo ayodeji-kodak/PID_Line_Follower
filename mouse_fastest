@@ -32,7 +32,7 @@ int threshold[SensorCount];
 
 float Kp = 0.4;
 float Ki = 0;
-float Kd = 0;
+float Kd = 0.0009;
 int P, I, D;
 int PIDvalue;
 double dt, last_time;
@@ -111,8 +111,8 @@ void linefollow() {
   motorspeeda = 150 + PIDvalue;
   motorspeedb = 150 - PIDvalue;
 
-  motorspeeda = constrain(motorspeeda, 0, 60);
-  motorspeedb = constrain(motorspeedb, 0, 60);
+  motorspeeda = constrain(motorspeeda, 0, 65);
+  motorspeedb = constrain(motorspeedb, 0, 65);
 
   forward(motorspeeda, motorspeedb);
 }
