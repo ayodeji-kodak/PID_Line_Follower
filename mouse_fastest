@@ -30,9 +30,9 @@ int minValues[SensorCount];
 int maxValues[SensorCount];
 int threshold[SensorCount];
 
-float Kp = 0.4;
+float Kp = 0.3;
 float Ki = 0;
-float Kd = 0.0009;
+float Kd = 0;
 int P, I, D;
 int PIDvalue;
 double dt, last_time;
@@ -140,7 +140,7 @@ void calibrate() {
   }
 
   // Calculate the average of the min and max values to set the SETPOINT
-  SETPOINT = (minValues[0] + maxValues[0] + minValues[1] + maxValues[1]) / 4;
+  SETPOINT = ((minValues[0] + maxValues[0] + minValues[1] + maxValues[1]) / 4) + 100;
 
   Serial.print("Calculated SETPOINT: ");
   Serial.println(SETPOINT);  // Print SETPOINT for debugging
